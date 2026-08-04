@@ -145,6 +145,20 @@ static bool connect_to_wifi_with_timeout(int timeout_seconds)
     }
 }
 
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+static esp_err_t show_ap_portal_setup_screen(void)
+{
+    char ap_ssid[WIFI_SSID_MAX_LEN] = {0};
+    char ap_password[AP_PASSWORD_MAX_LEN] = {0};
+    esp_err_t err =
+        wifi_manager_get_ap_credentials(ap_ssid, sizeof(ap_ssid), ap_password, sizeof(ap_password));
+    if (err != ESP_OK) {
+        return err;
+    }
+    return splash_screen_display_ap_credentials(ap_ssid, ap_password);
+}
+#endif
+
 static void button_task(void *arg)
 {
     bool last_boot_state = 1;  // Default distinct from current to avoid triggers if NC
@@ -171,10 +185,21 @@ static void button_task(void *arg)
             } else if (current_boot_state == 1 && last_boot_state == 0) {
                 uint32_t duration = (xTaskGetTickCount() - boot_press_time) * portTICK_PERIOD_MS;
 
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+                if (duration > 50) {
+                    ESP_LOGI(TAG, "Wake button pressed, showing AP setup screen");
+                    power_manager_reset_sleep_timer();
+                    esp_err_t err = show_ap_portal_setup_screen();
+                    if (err != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to show AP setup screen: %s", esp_err_to_name(err));
+                    }
+                }
+#else
                 if (duration > 50 && duration < 3000) {
                     ESP_LOGI(TAG, "Boot button pressed, resetting sleep timer");
                     power_manager_reset_sleep_timer();
                 }
+#endif
             }
             last_boot_state = current_boot_state;
         }
@@ -603,13 +628,13 @@ void app_main(void)
     }
 
 #if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    ESP_ERROR_CHECK(wifi_manager_init());
     char ap_ssid[WIFI_SSID_MAX_LEN] = {0};
     char ap_password[AP_PASSWORD_MAX_LEN] = {0};
-    ESP_ERROR_CHECK(wifi_manager_init());
     ESP_ERROR_CHECK(wifi_manager_get_ap_credentials(ap_ssid, sizeof(ap_ssid), ap_password,
                                                     sizeof(ap_password)));
     ESP_ERROR_CHECK(wifi_manager_start_ap(ap_ssid, ap_password));
-    ESP_ERROR_CHECK(splash_screen_display_ap_credentials(ap_ssid, ap_password));
+    ESP_ERROR_CHECK(show_ap_portal_setup_screen());
 
     xTaskCreate(button_task, "button_task", 8192, NULL, 5, NULL);
     ESP_ERROR_CHECK(http_server_init());

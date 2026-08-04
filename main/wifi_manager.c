@@ -247,6 +247,12 @@ esp_err_t wifi_manager_start_ap(const char *ssid, const char *password)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(CONFIG_PHOTOFRAME_AP_TX_POWER_QUARTER_DBM));
+    ESP_LOGI(TAG, "AP maximum transmit power set to %d quarter-dBm",
+             CONFIG_PHOTOFRAME_AP_TX_POWER_QUARTER_DBM);
+#endif
+
     // The default AP netif is created by wifi_manager_init(). Configure it
     // explicitly so the portal always lives at the documented address.
     vTaskDelay(pdMS_TO_TICKS(100));

@@ -365,7 +365,9 @@ esp_err_t splash_screen_display_ap_credentials(const char *ssid, const char *pas
         char password_text[AP_PASSWORD_MAX_LEN + 6];
         snprintf(ssid_text, sizeof(ssid_text), "SSID:%s", ssid);
         snprintf(password_text, sizeof(password_text), "PASS:%s", password);
-        int text_y = SPLASH_WIFI_QR_Y + SPLASH_WIFI_QR_SIZE + 8;
+        // Leave a clear gap below the QR's quiet zone so these lines cannot
+        // interfere with scanning on smaller panel layouts.
+        int text_y = SPLASH_WIFI_QR_Y + SPLASH_WIFI_QR_SIZE + 24;
         if (text_y + 30 > height) {
             text_y = height - 30;
         }

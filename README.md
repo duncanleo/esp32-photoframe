@@ -4,6 +4,25 @@ A modern, feature-rich firmware for ESP32-based e-paper photo frames (currently 
 
 ![PhotoFrame](.img/esp32-photoframe.png)
 
+## This fork: offline hotspot-only PhotoFrame
+
+This private fork is a hotspot-only version of the original PhotoFrame firmware.
+It never joins external Wi-Fi: a cold boot or the green Wake button starts a
+password-protected `PhotoFrame-XXXX` access point and serves the full dashboard
+at `http://192.168.4.1`. The display shows a WPA2 QR code plus the recoverable,
+NVS-persisted SSID and password; pressing the green Wake button again always
+returns to that setup screen.
+
+Timer, Left Rotate, and Right Clear wakes rotate images from local storage and
+return to deep sleep without starting the hotspot. Factory reset (or a full
+flash erase) clears the AP password, so the next interactive wake creates a
+new one.
+
+The AP maximum transmit power is configured at build time by
+`CONFIG_PHOTOFRAME_AP_TX_POWER_QUARTER_DBM` (default `32`, or 8 dBm). The
+ESP32 radio and local regulatory limits may clamp the actual power below that
+maximum.
+
 ## Key Features
 
 - 🎨 **Superior Image Quality**: Measured color palette with automatic calibration produces significantly better results than stock firmware

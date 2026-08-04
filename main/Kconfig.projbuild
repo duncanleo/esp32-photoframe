@@ -8,4 +8,14 @@ config PHOTOFRAME_AP_PORTAL_ONLY
         wakes and serve the normal portal at 192.168.4.1. Timer and Rotate
         button wakes stay offline and rotate images from local storage.
 
+config PHOTOFRAME_AP_TX_POWER_QUARTER_DBM
+    int "AP maximum transmit power (0.25 dBm units)"
+    depends on PHOTOFRAME_AP_PORTAL_ONLY
+    range 8 84
+    default 32
+    help
+        Maximum AP transmit power in 0.25 dBm units. The default, 32, is
+        8 dBm for nearby access. ESP-IDF and the radio's regulatory calibration may clamp
+        the effective value to a lower legal maximum.
+
 endmenu
