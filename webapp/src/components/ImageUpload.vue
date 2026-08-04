@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useAppStore, useSettingsStore } from "../stores";
 import ImageProcessing from "./ImageProcessing.vue";
 import ProcessingControls from "./ProcessingControls.vue";
@@ -251,45 +251,6 @@ function resetUpload() {
   settingsStore.activeSettingsTab = "general";
 }
 
-// AI Generation Logic
-const showAiDialog = ref(false);
-const aiPrompt = ref("");
-const aiModel = ref("gpt-image-1.5");
-const generatingAi = ref(false);
-
-const aiModelOptions = computed(() => {
-  if (aiProvider.value === 0) {
-    return [
-      { title: "GPT Image 1.5", value: "gpt-image-1.5" },
-      { title: "GPT Image 1", value: "gpt-image-1" },
-      { title: "GPT Image 1 Mini", value: "gpt-image-1-mini" },
-    ];
-  } else {
-    return [
-      { title: "Gemini 3.1 Flash Image", value: "gemini-3.1-flash-image-preview" },
-      { title: "Gemini 3 Pro Image", value: "gemini-3-pro-image-preview" },
-      { title: "Gemini 2.5 Flash Image", value: "gemini-2.5-flash-image" },
-    ];
-  }
-});
-
-const aiProvider = ref(0);
-const aiProviderOptions = computed(() => {
-  const options = [];
-  if (settingsStore.deviceSettings.aiCredentials.openaiApiKey) {
-    options.push({ title: "OpenAI", value: 0 });
-  }
-  if (settingsStore.deviceSettings.aiCredentials.googleApiKey) {
-    options.push({ title: "Google Gemini", value: 1 });
-  }
-  return options;
-});
-
-// Reset model to first option when provider changes
-watch(aiProvider, (newProvider) => {
-  aiModel.value = newProvider === 0 ? "gpt-image-1.5" : "gemini-3.1-flash-image-preview";
-});
-
 const showFormatConfirm = ref(false);
 const formatting = ref(false);
 
@@ -320,162 +281,6 @@ function showMessage(text, color = "info") {
   snackbarText.value = text;
   snackbarColor.value = color;
   snackbar.value = true;
-}
-
-function openAiDialog() {
-  const openaiKey = settingsStore.deviceSettings.aiCredentials.openaiApiKey;
-  const googleKey = settingsStore.deviceSettings.aiCredentials.googleApiKey;
-
-  if (!openaiKey && !googleKey) {
-    showMessage("Please configure an API Key in Settings > AI Generation first.", "error");
-    settingsStore.activeSettingsTab = "ai";
-    return;
-  }
-
-  aiPrompt.value = "";
-  // Default to OpenAI if key exists, otherwise Google
-  aiProvider.value = openaiKey ? 0 : 1;
-  aiModel.value = aiProvider.value === 0 ? "gpt-image-1.5" : "gemini-3.1-flash-image-preview";
-  showAiDialog.value = true;
-}
-
-async function generateAiImage() {
-  generatingAi.value = true;
-  try {
-    const provider = aiProvider.value;
-    const apiKey =
-      provider === 0
-        ? settingsStore.deviceSettings.aiCredentials.openaiApiKey
-        : settingsStore.deviceSettings.aiCredentials.googleApiKey;
-
-    const isPortrait = settingsStore.deviceSettings.displayOrientation === "portrait";
-    let src = null;
-
-    if (provider === 0) {
-      // OpenAI
-      const isDalle3 = aiModel.value.includes("dall-e-3");
-      const isDalle2 = aiModel.value.includes("dall-e-2");
-      let size = "1024x1024";
-
-      if (isDalle3) {
-        size = isPortrait ? "1024x1792" : "1792x1024";
-      } else if (isDalle2) {
-        size = "1024x1024";
-      } else {
-        // GPT Image models (1.5, 1, etc) often support 1024x1536 (3:4) but not 1792 (16:9)
-        size = isPortrait ? "1024x1536" : "1536x1024";
-      }
-
-      const body = {
-        model: aiModel.value,
-        prompt: aiPrompt.value,
-        n: 1,
-        size: size,
-      };
-
-      if (isDalle3) {
-        // DALL-E 3: quality ("standard" or "hd"), style ("vivid" or "natural")
-        body.quality = "hd";
-        body.style = "vivid";
-        body.response_format = "b64_json";
-      } else if (isDalle2) {
-        // DALL-E 2: no quality/style params, only response_format
-        body.response_format = "b64_json";
-      } else {
-        // GPT Image models: quality ("low", "medium", "high"), output_format, output_compression
-        // Note: GPT Image models return b64_json by default, no response_format needed
-        body.quality = "high";
-      }
-
-      const response = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-
-      if (data.data?.[0]?.b64_json) {
-        // All models return b64_json when requested (DALL-E) or by default (GPT Image)
-        src = `data:image/png;base64,${data.data[0].b64_json}`;
-      } else if (data.data?.[0]?.url) {
-        // Fallback: handle URL response if returned
-        const urlRes = await fetch(data.data[0].url);
-        if (!urlRes.ok) throw new Error("Failed to download image from OpenAI URL");
-        const blob = await urlRes.blob();
-        src = URL.createObjectURL(blob);
-      } else {
-        throw new Error("Invalid response from AI API: missing image data");
-      }
-    } else {
-      // Google Gemini
-      // Build imageConfig - imageSize only supported by Gemini 3 Pro
-      const imageConfig = {
-        aspectRatio: isPortrait ? "3:4" : "4:3",
-      };
-
-      if (aiModel.value.includes("gemini-3")) {
-        // Select imageSize based on display resolution
-        // 1K (~1024px), 2K (~2048px), 4K (~4096px)
-        const maxDim = Math.max(displayWidth.value, displayHeight.value);
-        if (maxDim > 2048) {
-          imageConfig.imageSize = "4K";
-        } else if (maxDim > 1024) {
-          imageConfig.imageSize = "2K";
-        } else {
-          imageConfig.imageSize = "1K";
-        }
-      }
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${aiModel.value}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: aiPrompt.value }] }],
-            generationConfig: {
-              responseModalities: ["Image"],
-              imageConfig: imageConfig,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      const b64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!b64) {
-        throw new Error("Invalid response from Google API: missing inlineData");
-      }
-      src = `data:image/jpeg;base64,${b64}`;
-    }
-
-    const res = await fetch(src);
-    const blob = await res.blob();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const file = new File([blob], `ai-generated-${timestamp}.jpg`, { type: "image/jpeg" });
-
-    showAiDialog.value = false;
-    await processFile(file);
-    showMessage("AI image generated successfully!", "success");
-  } catch (error) {
-    showMessage(`Generation failed: ${error.message}`, "error");
-  } finally {
-    generatingAi.value = false;
-  }
 }
 </script>
 
@@ -541,15 +346,6 @@ async function generateAiImage() {
         <v-icon icon="mdi-cloud-upload" size="64" color="grey" />
         <p class="text-h6 mt-4">Click or drag image to upload</p>
         <p class="text-body-2 text-grey">Supports: JPG, PNG, HEIC, WebP, GIF, BMP</p>
-        <div class="my-3 d-flex align-center" style="width: 100%">
-          <v-divider />
-          <span class="mx-2 text-grey text-caption">OR</span>
-          <v-divider />
-        </div>
-        <v-btn color="primary" variant="tonal" @click.stop="openAiDialog">
-          <v-icon icon="mdi-magic-staff" start />
-          Generate with AI
-        </v-btn>
       </v-sheet>
 
       <!-- Preview Area with Processing. In wide-edit mode the processing
@@ -612,46 +408,6 @@ async function generateAiImage() {
     <!-- Upload Progress -->
     <v-progress-linear v-if="uploading" :model-value="uploadProgress" color="primary" height="4" />
 
-    <!-- AI Input Dialog -->
-    <v-dialog v-model="showAiDialog" max-width="500">
-      <v-card>
-        <v-card-title>Generate Image</v-card-title>
-        <v-card-text>
-          <v-select
-            v-model="aiProvider"
-            :items="aiProviderOptions"
-            item-title="title"
-            item-value="value"
-            label="Provider"
-            variant="outlined"
-            class="mb-4"
-          />
-          <v-select
-            v-model="aiModel"
-            :items="aiModelOptions"
-            item-title="title"
-            item-value="value"
-            label="Model"
-            variant="outlined"
-            class="mb-4"
-          />
-          <v-textarea
-            v-model="aiPrompt"
-            label="Prompt"
-            variant="outlined"
-            rows="3"
-            auto-grow
-            hint="Describe the image you want to generate"
-            persistent-hint
-          />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="showAiDialog = false">Cancel</v-btn>
-          <v-btn color="primary" :loading="generatingAi" @click="generateAiImage"> Generate </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
     <!-- Format Storage Confirmation Dialog -->
     <v-dialog v-model="showFormatConfirm" max-width="400">
       <v-card>

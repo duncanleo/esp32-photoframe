@@ -394,9 +394,7 @@ async function performFactoryReset() {
         <v-tab value="general"> General </v-tab>
         <v-tab value="autoRotate"> Auto Rotate </v-tab>
         <v-tab value="power"> Power </v-tab>
-        <v-tab value="homeAssistant"> Home Assistant </v-tab>
         <v-tab value="processing"> Processing </v-tab>
-        <v-tab value="ai"> AI Generation </v-tab>
         <v-tab value="calibration">
           {{ appStore.isGrayscale ? "Grayscale" : "Palette" }}
         </v-tab>
@@ -415,29 +413,6 @@ async function performFactoryReset() {
                   variant="outlined"
                   hint="Used for mDNS hostname (e.g., 'Living Room Frame' → living-room-frame.local)"
                   persistent-hint
-                />
-              </v-col>
-            </v-row>
-
-            <v-row>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="settingsStore.deviceSettings.wifiSsid"
-                  label="WiFi SSID"
-                  variant="outlined"
-                  hint="Network name to connect to"
-                  persistent-hint
-                />
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="settingsStore.deviceSettings.wifiPassword"
-                  label="WiFi Password"
-                  type="password"
-                  variant="outlined"
-                  hint="Leave empty to keep current password"
-                  persistent-hint
-                  placeholder="••••••••"
                 />
               </v-col>
             </v-row>
@@ -503,78 +478,6 @@ async function performFactoryReset() {
                 />
               </v-col>
             </v-row>
-            <!-- Advanced network settings (#43): collapsed by default — NTP,
-                 static IP and DNS override are tinkerer territory. -->
-            <v-expansion-panels class="mt-2" variant="accordion">
-              <v-expansion-panel title="Advanced network settings" elevation="0">
-                <v-expansion-panel-text>
-                  <v-row>
-                    <v-col cols="12" md="6">
-                      <v-text-field
-                        v-model="settingsStore.deviceSettings.ntpServer"
-                        label="NTP Server"
-                        variant="outlined"
-                        hint="e.g., pool.ntp.org, cn.pool.ntp.org, or a local IP"
-                        persistent-hint
-                      />
-                    </v-col>
-                    <v-col cols="12" md="6">
-                      <v-select
-                        v-model="settingsStore.deviceSettings.ipMode"
-                        :items="[
-                          { title: 'Automatic (DHCP)', value: 'dhcp' },
-                          { title: 'Static IP', value: 'static' },
-                        ]"
-                        label="IP Configuration"
-                        variant="outlined"
-                        hint="Applied on the next boot / wake"
-                        persistent-hint
-                      />
-                    </v-col>
-                  </v-row>
-                  <v-row v-if="settingsStore.deviceSettings.ipMode === 'static'">
-                    <v-col cols="12" md="4">
-                      <v-text-field
-                        v-model="settingsStore.deviceSettings.staticIp"
-                        label="IP Address"
-                        variant="outlined"
-                        placeholder="192.168.1.50"
-                      />
-                    </v-col>
-                    <v-col cols="12" md="4">
-                      <v-text-field
-                        v-model="settingsStore.deviceSettings.staticNetmask"
-                        label="Netmask"
-                        variant="outlined"
-                      />
-                    </v-col>
-                    <v-col cols="12" md="4">
-                      <v-text-field
-                        v-model="settingsStore.deviceSettings.staticGateway"
-                        label="Gateway"
-                        variant="outlined"
-                        placeholder="192.168.1.1"
-                      />
-                    </v-col>
-                  </v-row>
-                  <v-row>
-                    <v-col cols="12" md="6">
-                      <v-text-field
-                        v-model="settingsStore.deviceSettings.dnsServer"
-                        label="DNS Server"
-                        variant="outlined"
-                        :hint="
-                          settingsStore.deviceSettings.ipMode === 'static'
-                            ? 'Leave empty to use the gateway'
-                            : 'Optional override; leave empty to use DHCP-provided DNS'
-                        "
-                        persistent-hint
-                      />
-                    </v-col>
-                  </v-row>
-                </v-expansion-panel-text>
-              </v-expansion-panel>
-            </v-expansion-panels>
           </v-tabs-window-item>
 
           <!-- Auto Rotate Tab -->
@@ -739,18 +642,6 @@ async function performFactoryReset() {
             </v-expand-transition>
           </v-tabs-window-item>
 
-          <!-- Home Assistant Tab -->
-          <v-tabs-window-item class="mt-2" value="homeAssistant">
-            <v-text-field
-              v-model="settingsStore.deviceSettings.haUrl"
-              label="Home Assistant URL"
-              variant="outlined"
-              placeholder="http://homeassistant.local:8123"
-              hint="Configure for dynamic image serving and battery level reporting"
-              persistent-hint
-            />
-          </v-tabs-window-item>
-
           <!-- Processing Tab -->
           <v-tabs-window-item value="processing">
             <div class="pa-4">
@@ -766,49 +657,6 @@ async function performFactoryReset() {
                 @update:preset="settingsStore.preset = $event"
                 @preset-change="onPresetChange"
               />
-            </div>
-          </v-tabs-window-item>
-
-          <!-- AI Generation Tab -->
-          <v-tabs-window-item value="ai">
-            <v-alert type="info" variant="tonal" density="compact" class="mt-2 mb-4">
-              API keys are used for client-side AI image generation when uploading images.
-            </v-alert>
-
-            <v-text-field
-              v-model="settingsStore.deviceSettings.aiCredentials.openaiApiKey"
-              label="OpenAI API Key"
-              variant="outlined"
-              type="password"
-              hint="sk-..."
-              persistent-hint
-              class="mb-2"
-            />
-            <div class="text-caption text-grey ml-2 mb-4">
-              Get your API key at
-              <a
-                href="https://platform.openai.com/api-keys"
-                target="_blank"
-                class="text-primary text-decoration-none"
-                >platform.openai.com</a
-              >
-            </div>
-
-            <v-text-field
-              v-model="settingsStore.deviceSettings.aiCredentials.googleApiKey"
-              label="Google Gemini API Key"
-              variant="outlined"
-              type="password"
-              class="mb-2"
-            />
-            <div class="text-caption text-grey ml-2 mb-4">
-              Get your API key at
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                class="text-primary text-decoration-none"
-                >aistudio.google.com</a
-              >
             </div>
           </v-tabs-window-item>
 
@@ -944,7 +792,7 @@ async function performFactoryReset() {
               All device settings will be permanently erased, including:
             </div>
             <ul class="mt-2">
-              <li>WiFi credentials</li>
+              <li>Stored hotspot password</li>
               <li>Image processing settings</li>
               <li>Device configuration</li>
               <li>All custom settings</li>
@@ -956,9 +804,8 @@ async function performFactoryReset() {
           </div>
           <v-alert type="info" variant="tonal" density="compact">
             <div class="text-body-2">
-              <strong>After reset:</strong> The device will create a WiFi access point named
-              <strong>"PhotoFrame"</strong>. Connect to it from your device to restart the
-              provisioning process.
+              <strong>After reset:</strong> The device will generate a new hotspot password and show
+              the connection QR code on its setup screen.
             </div>
           </v-alert>
         </v-card-text>

@@ -5,7 +5,6 @@ import AppHeader from "../components/AppHeader.vue";
 import AlbumGallery from "../components/AlbumGallery.vue";
 import ImageUpload from "../components/ImageUpload.vue";
 import SettingsPanel from "../components/SettingsPanel.vue";
-import OtaUpdate from "../components/OtaUpdate.vue";
 
 const appStore = useAppStore();
 const settingsStore = useSettingsStore();
@@ -131,8 +130,6 @@ onUnmounted(() => {
         <ImageUpload class="mt-6" />
 
         <SettingsPanel class="mt-6" />
-
-        <OtaUpdate class="mt-6" />
       </v-container>
     </v-main>
 
