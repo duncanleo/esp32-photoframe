@@ -13,6 +13,9 @@ at `http://192.168.4.1`. The display shows a WPA2 QR code plus the recoverable,
 NVS-persisted SSID and password; pressing the green Wake button again always
 returns to that setup screen.
 
+Captive-network detection is enabled in this mode: after joining the hotspot,
+the standard iOS, Android, and Windows prompts lead to the main dashboard.
+
 Timer, Left Rotate, and Right Clear wakes rotate images from local storage and
 return to deep sleep without starting the hotspot. Factory reset (or a full
 flash erase) clears the AP password, so the next interactive wake creates a

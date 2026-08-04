@@ -18,6 +18,7 @@
 #include "config_manager.h"
 #include "debug_log.h"
 #include "display_manager.h"
+#include "dns_server.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_http_server.h"
@@ -92,6 +93,30 @@ static esp_err_t index_handler(httpd_req_t *req)
     httpd_resp_send(req, (const char *) index_html_start, index_html_size);
     return ESP_OK;
 }
+
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+static esp_err_t captive_portal_dashboard_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Captive portal request: %s", req->uri);
+
+    // Use an absolute local URL: captive probes arrive with a public Host
+    // header, while the dashboard must load from the AP's local address.
+    static const char response[] =
+        "<!doctype html><html><head>"
+        "<meta http-equiv=\"refresh\" content=\"0;url=http://192.168.4.1/\">"
+        "</head><body><a href=\"http://192.168.4.1/\">Open PhotoFrame</a></body></html>";
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+static esp_err_t captive_portal_not_found_handler(httpd_req_t *req, httpd_err_code_t err)
+{
+    (void) err;
+    return captive_portal_dashboard_handler(req);
+}
+#endif
 
 static esp_err_t index_css_handler(httpd_req_t *req)
 {
@@ -2618,6 +2643,30 @@ esp_err_t http_server_init(void)
             .uri = "/", .method = HTTP_GET, .handler = index_handler, .user_ctx = NULL};
         httpd_register_uri_handler(server, &index_uri);
 
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+        // Common captive-network probes. Unknown browser paths are handled
+        // below too, so other platform probes still reach the dashboard.
+        httpd_uri_t ios_captive_uri = {.uri = "/hotspot-detect.html",
+                                       .method = HTTP_GET,
+                                       .handler = captive_portal_dashboard_handler,
+                                       .user_ctx = NULL};
+        httpd_register_uri_handler(server, &ios_captive_uri);
+
+        httpd_uri_t android_captive_uri = {.uri = "/generate_204",
+                                           .method = HTTP_GET,
+                                           .handler = captive_portal_dashboard_handler,
+                                           .user_ctx = NULL};
+        httpd_register_uri_handler(server, &android_captive_uri);
+
+        httpd_uri_t windows_captive_uri = {.uri = "/connecttest.txt",
+                                           .method = HTTP_GET,
+                                           .handler = captive_portal_dashboard_handler,
+                                           .user_ctx = NULL};
+        httpd_register_uri_handler(server, &windows_captive_uri);
+
+        httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, captive_portal_not_found_handler);
+#endif
+
         httpd_uri_t index_css_uri = {.uri = "/assets/index.css",
                                      .method = HTTP_GET,
                                      .handler = index_css_handler,
@@ -2865,6 +2914,10 @@ esp_err_t http_server_init(void)
         httpd_register_uri_handler(server, &display_calibration_uri);
 
         ESP_LOGI(TAG, "HTTP server started");
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+        ESP_ERROR_CHECK(dns_server_start());
+        ESP_LOGI(TAG, "Captive portal DNS and dashboard redirects enabled");
+#endif
         return ESP_OK;
     }
 
@@ -2874,6 +2927,9 @@ esp_err_t http_server_init(void)
 
 esp_err_t http_server_stop(void)
 {
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    dns_server_stop();
+#endif
     if (server) {
         httpd_stop(server);
         server = NULL;
