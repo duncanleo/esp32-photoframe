@@ -12,7 +12,6 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "lwip/ip4_addr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "power_manager.h"
@@ -489,49 +488,10 @@ esp_err_t wifi_provisioning_start_ap(void)
 {
     ESP_LOGI(TAG, "Starting WiFi AP for provisioning");
 
-    // Stop WiFi first
-    esp_wifi_stop();
-
-    // Set WiFi mode to AP
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-
-    // Configure WiFi AP with unique SSID
+    // AP networking belongs to wifi_manager; this module owns only the
+    // provisioning server and captive-portal DNS endpoints.
     const char *ap_ssid = get_setup_ap_ssid();
-
-    wifi_config_t wifi_config = {
-        .ap = {.channel = 1, .password = "", .max_connection = 4, .authmode = WIFI_AUTH_OPEN},
-    };
-    strncpy((char *) wifi_config.ap.ssid, ap_ssid, sizeof(wifi_config.ap.ssid));
-    wifi_config.ap.ssid_len = strlen(ap_ssid);
-
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    // Wait a bit for netif to be created
-    vTaskDelay(pdMS_TO_TICKS(100));
-
-    // Now get the AP network interface
-    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
-    if (ap_netif == NULL) {
-        ESP_LOGE(TAG, "Failed to get AP netif handle");
-        return ESP_FAIL;
-    }
-
-    // Stop DHCP server first
-    esp_netif_dhcps_stop(ap_netif);
-
-    // Set static IP for the AP
-    esp_netif_ip_info_t ip_info;
-    IP4_ADDR(&ip_info.ip, 192, 168, 4, 1);
-    IP4_ADDR(&ip_info.gw, 192, 168, 4, 1);
-    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip_info));
-
-    // Start DHCP server
-    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
-
-    ESP_LOGI(TAG, "WiFi AP started - SSID: %s", ap_ssid);
-    ESP_LOGI(TAG, "AP IP address set to 192.168.4.1");
+    ESP_ERROR_CHECK(wifi_manager_start_ap(ap_ssid, NULL));
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
@@ -657,7 +617,7 @@ esp_err_t wifi_provisioning_stop_ap(void)
         provisioning_server = NULL;
     }
 
-    esp_wifi_stop();
+    wifi_manager_stop_ap();
     ESP_LOGI(TAG, "WiFi AP stopped");
 
     return ESP_OK;

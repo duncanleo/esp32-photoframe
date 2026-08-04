@@ -1144,6 +1144,12 @@ esp_err_t trigger_image_rotation(void)
     rotation_mode_t rotation_mode = config_manager_get_rotation_mode();
     esp_err_t result = ESP_OK;
 
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    // The AP-only build intentionally rotates only files already available on
+    // local storage, even if an old NVS configuration selected URL mode.
+    rotation_mode = ROTATION_MODE_STORAGE;
+#endif
+
     if (rotation_mode == ROTATION_MODE_URL) {
         // URL mode - fetch image from URL
         const char *image_url = config_manager_get_image_url();
@@ -1309,15 +1315,17 @@ const char *get_setup_ap_ssid(void)
 
     if (!built) {
         const char *id = get_device_id();
-        // Use last 5 hex chars of device ID, uppercased
-        char short_id[6];
-        strncpy(short_id, id + 7, 5);
-        short_id[5] = '\0';
-        for (int i = 0; i < 5; i++) {
+        // Use the last four MAC hex characters as a stable, locally useful
+        // identifier. This is deliberately only the SSID suffix, never a
+        // password or other secret.
+        char short_id[5];
+        strncpy(short_id, id + 8, 4);
+        short_id[4] = '\0';
+        for (int i = 0; i < 4; i++) {
             if (short_id[i] >= 'a' && short_id[i] <= 'f')
                 short_id[i] -= 32;
         }
-        snprintf(ap_ssid, sizeof(ap_ssid), "PhotoFrame - %s", short_id);
+        snprintf(ap_ssid, sizeof(ap_ssid), "PhotoFrame-%s", short_id);
         built = true;
     }
 

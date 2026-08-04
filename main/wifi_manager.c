@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 #include "config.h"
@@ -7,12 +8,14 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_random.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 #include "lwip/err.h"
+#include "lwip/ip4_addr.h"
 #include "lwip/sys.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -30,6 +33,33 @@ static bool s_is_connected = false;
 static esp_netif_t *s_sta_netif = NULL;
 
 static void apply_dns_override(void);
+
+static bool ap_password_is_valid(const char *password)
+{
+    size_t length = password ? strlen(password) : 0;
+    return length >= 8 && length <= 63;
+}
+
+static void generate_ap_password(char *password, size_t password_len)
+{
+    // Four pronounceable CVC chunks plus four random digits give a password
+    // that can be read from an e-paper display without deriving any secret
+    // from the public MAC address.
+    static const char consonants[] = "bcdfghjkmnprstvwxz";
+    static const char vowels[] = "aeiou";
+    const size_t consonant_count = sizeof(consonants) - 1;
+    const size_t vowel_count = sizeof(vowels) - 1;
+    char chunks[4][4] = {0};
+
+    for (size_t i = 0; i < 4; i++) {
+        chunks[i][0] = consonants[esp_random() % consonant_count];
+        chunks[i][1] = vowels[esp_random() % vowel_count];
+        chunks[i][2] = consonants[esp_random() % consonant_count];
+    }
+
+    snprintf(password, password_len, "%s-%s-%s-%s-%04" PRIu32, chunks[0], chunks[1], chunks[2],
+             chunks[3], esp_random() % 10000);
+}
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
                           void *event_data)
@@ -145,6 +175,109 @@ esp_err_t wifi_manager_init(void)
     return ESP_OK;
 }
 
+esp_err_t wifi_manager_get_ap_credentials(char *ssid, size_t ssid_len, char *password,
+                                          size_t password_len)
+{
+    if (!ssid || ssid_len == 0 || !password || password_len < AP_PASSWORD_MAX_LEN) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const char *ap_ssid = get_setup_ap_ssid();
+    if (strlen(ap_ssid) >= ssid_len) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    strcpy(ssid, ap_ssid);
+
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    size_t stored_length = password_len;
+    err = nvs_get_str(nvs_handle, NVS_AP_PASSWORD_KEY, password, &stored_length);
+    if (err == ESP_OK && ap_password_is_valid(password)) {
+        nvs_close(nvs_handle);
+        return ESP_OK;
+    }
+
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND && err != ESP_ERR_NVS_INVALID_LENGTH) {
+        nvs_close(nvs_handle);
+        return err;
+    }
+
+    generate_ap_password(password, password_len);
+    err = nvs_set_str(nvs_handle, NVS_AP_PASSWORD_KEY, password);
+    if (err == ESP_OK) {
+        err = nvs_commit(nvs_handle);
+    }
+    nvs_close(nvs_handle);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Generated and saved a new AP password");
+    }
+    return err;
+}
+
+esp_err_t wifi_manager_start_ap(const char *ssid, const char *password)
+{
+    if (!ssid || ssid[0] == '\0' || strlen(ssid) >= sizeof(((wifi_config_t *) 0)->ap.ssid) ||
+        (password && password[0] != '\0' && !ap_password_is_valid(password))) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t err = esp_wifi_stop();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED) {
+        return err;
+    }
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+
+    wifi_config_t wifi_config = {
+        .ap = {
+            .channel = 1,
+            .max_connection = 4,
+            .authmode = (password && password[0] != '\0') ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN,
+        }};
+    strncpy((char *) wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
+    wifi_config.ap.ssid_len = strlen(ssid);
+    if (password && password[0] != '\0') {
+        strncpy((char *) wifi_config.ap.password, password, sizeof(wifi_config.ap.password) - 1);
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    // The default AP netif is created by wifi_manager_init(). Configure it
+    // explicitly so the portal always lives at the documented address.
+    vTaskDelay(pdMS_TO_TICKS(100));
+    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (!ap_netif) {
+        ESP_LOGE(TAG, "Failed to get AP netif handle");
+        return ESP_FAIL;
+    }
+
+    err = esp_netif_dhcps_stop(ap_netif);
+    if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
+        return err;
+    }
+    esp_netif_ip_info_t ip_info = {0};
+    IP4_ADDR(&ip_info.ip, 192, 168, 4, 1);
+    IP4_ADDR(&ip_info.gw, 192, 168, 4, 1);
+    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip_info));
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
+
+    ESP_LOGI(TAG, "WiFi AP started - SSID: %s (%s)", ssid,
+             password && password[0] != '\0' ? "WPA2" : "open");
+    ESP_LOGI(TAG, "AP IP address set to 192.168.4.1");
+    return ESP_OK;
+}
+
+esp_err_t wifi_manager_stop_ap(void)
+{
+    return esp_wifi_stop();
+}
+
 esp_err_t wifi_manager_apply_ip_config(void)
 {
     if (!s_sta_netif) {
@@ -200,6 +333,10 @@ static void apply_dns_override(void)
 
 esp_err_t wifi_manager_connect(const char *ssid, const char *password)
 {
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    ESP_LOGW(TAG, "STA connection is disabled in AP-only firmware");
+    return ESP_ERR_NOT_SUPPORTED;
+#else
     if (!ssid || strlen(ssid) == 0) {
         ESP_LOGE(TAG, "SSID is empty");
         return ESP_ERR_INVALID_ARG;
@@ -238,6 +375,7 @@ esp_err_t wifi_manager_connect(const char *ssid, const char *password)
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
         return ESP_FAIL;
     }
+#endif
 }
 
 esp_err_t wifi_manager_disconnect(void)

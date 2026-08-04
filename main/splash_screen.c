@@ -5,6 +5,7 @@
 #include <zlib.h>
 
 #include "board_hal.h"
+#include "config.h"
 #include "epaper.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -58,6 +59,102 @@ typedef struct {
 } qr_draw_ctx_t;
 
 static qr_draw_ctx_t s_qr_draw_ctx;
+
+// Compact 5x7 glyphs for the credentials printed over the generated splash.
+// The password alphabet is deliberately restricted to lowercase CVC chunks,
+// digits, and hyphens, so this renderer remains small and readable.
+typedef struct {
+    char character;
+    uint8_t rows[7];
+} splash_glyph_t;
+
+static const splash_glyph_t splash_font[] = {
+    {' ', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+    {'-', {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00}},
+    {':', {0x00, 0x04, 0x04, 0x00, 0x04, 0x04, 0x00}},
+    {'0', {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}},
+    {'1', {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}},
+    {'2', {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}},
+    {'3', {0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E}},
+    {'4', {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02}},
+    {'5', {0x1F, 0x10, 0x10, 0x1E, 0x01, 0x01, 0x1E}},
+    {'6', {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E}},
+    {'7', {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}},
+    {'8', {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E}},
+    {'9', {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C}},
+    {'A', {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
+    {'B', {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}},
+    {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
+    {'D', {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E}},
+    {'E', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F}},
+    {'F', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10}},
+    {'I', {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E}},
+    {'M', {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11}},
+    {'O', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},
+    {'P', {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10}},
+    {'R', {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11}},
+    {'S', {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E}},
+    {'W', {0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11}},
+    {'a', {0x00, 0x00, 0x0E, 0x01, 0x0F, 0x11, 0x0F}},
+    {'b', {0x10, 0x10, 0x1E, 0x11, 0x11, 0x11, 0x1E}},
+    {'c', {0x00, 0x00, 0x0E, 0x11, 0x10, 0x11, 0x0E}},
+    {'d', {0x01, 0x01, 0x0F, 0x11, 0x11, 0x11, 0x0F}},
+    {'e', {0x00, 0x00, 0x0E, 0x11, 0x1F, 0x10, 0x0E}},
+    {'f', {0x06, 0x08, 0x1C, 0x08, 0x08, 0x08, 0x08}},
+    {'g', {0x00, 0x00, 0x0F, 0x11, 0x0F, 0x01, 0x0E}},
+    {'h', {0x10, 0x10, 0x1E, 0x11, 0x11, 0x11, 0x11}},
+    {'i', {0x04, 0x00, 0x0C, 0x04, 0x04, 0x04, 0x0E}},
+    {'j', {0x02, 0x00, 0x06, 0x02, 0x02, 0x12, 0x0C}},
+    {'k', {0x10, 0x10, 0x12, 0x14, 0x18, 0x14, 0x12}},
+    {'l', {0x0C, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E}},
+    {'m', {0x00, 0x00, 0x1A, 0x15, 0x15, 0x11, 0x11}},
+    {'n', {0x00, 0x00, 0x1E, 0x11, 0x11, 0x11, 0x11}},
+    {'o', {0x00, 0x00, 0x0E, 0x11, 0x11, 0x11, 0x0E}},
+    {'p', {0x00, 0x00, 0x1E, 0x11, 0x1E, 0x10, 0x10}},
+    {'r', {0x00, 0x00, 0x16, 0x19, 0x10, 0x10, 0x10}},
+    {'s', {0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E}},
+    {'t', {0x08, 0x08, 0x1C, 0x08, 0x08, 0x09, 0x06}},
+    {'u', {0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0D}},
+    {'v', {0x00, 0x00, 0x11, 0x11, 0x11, 0x0A, 0x04}},
+    {'w', {0x00, 0x00, 0x11, 0x11, 0x15, 0x15, 0x0A}},
+    {'x', {0x00, 0x00, 0x11, 0x0A, 0x04, 0x0A, 0x11}},
+    {'y', {0x00, 0x00, 0x11, 0x11, 0x0F, 0x01, 0x0E}},
+    {'z', {0x00, 0x00, 0x1F, 0x02, 0x04, 0x08, 0x1F}},
+};
+
+static const splash_glyph_t *find_splash_glyph(char character)
+{
+    for (size_t i = 0; i < sizeof(splash_font) / sizeof(splash_font[0]); i++) {
+        if (splash_font[i].character == character) {
+            return &splash_font[i];
+        }
+    }
+    return &splash_font[0];
+}
+
+static void draw_splash_text(uint8_t *buffer, int width, int y, const char *text)
+{
+    const int scale = 2;
+    const int char_width = 6 * scale;
+    int x = (width - (int) strlen(text) * char_width) / 2;
+
+    for (const char *p = text; *p != '\0'; p++, x += char_width) {
+        const splash_glyph_t *glyph = find_splash_glyph(*p);
+        for (int row = 0; row < 7; row++) {
+            for (int column = 0; column < 5; column++) {
+                if ((glyph->rows[row] & (1U << (4 - column))) == 0) {
+                    continue;
+                }
+                for (int dy = 0; dy < scale; dy++) {
+                    for (int dx = 0; dx < scale; dx++) {
+                        set_pixel(buffer, width, x + column * scale + dx, y + row * scale + dy,
+                                  EPD_BLACK);
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * Check if a pixel is inside a rounded rectangle.
@@ -227,6 +324,60 @@ esp_err_t splash_screen_display(void)
     heap_caps_free(epd_buffer);
     ESP_LOGI(TAG, "Splash screen displayed successfully");
     return ESP_OK;
+}
+
+esp_err_t splash_screen_display_ap_credentials(const char *ssid, const char *password)
+{
+    if (!ssid || !password) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int width = BOARD_HAL_DISPLAY_WIDTH;
+    int height = BOARD_HAL_DISPLAY_HEIGHT;
+    int buf_size = ((width + 1) / 2) * height;
+    uint8_t *epd_buffer = heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    if (!epd_buffer) {
+        ESP_LOGE(TAG, "Failed to allocate display buffer");
+        return ESP_ERR_NO_MEM;
+    }
+    memset(epd_buffer, splash_white_nibble() * 0x11, buf_size);
+
+    size_t epdgz_size = splash_epdgz_end - splash_epdgz_start;
+    esp_err_t ret = decompress_gzip(splash_epdgz_start, epdgz_size, epd_buffer, buf_size);
+    if (ret != ESP_OK) {
+        heap_caps_free(epd_buffer);
+        return ret;
+    }
+
+    char wifi_qr_data[160];
+    snprintf(wifi_qr_data, sizeof(wifi_qr_data), "WIFI:T:WPA;S:%s;P:%s;;", ssid, password);
+    s_qr_draw_ctx = (qr_draw_ctx_t){.buffer = epd_buffer,
+                                    .buf_width = width,
+                                    .pos_x = SPLASH_WIFI_QR_X,
+                                    .pos_y = SPLASH_WIFI_QR_Y,
+                                    .target_size = SPLASH_WIFI_QR_SIZE};
+    esp_qrcode_config_t qr_cfg = {.display_func = qr_draw_callback,
+                                  .max_qrcode_version = 10,
+                                  .qrcode_ecc_level = ESP_QRCODE_ECC_MED};
+    ret = esp_qrcode_generate(&qr_cfg, wifi_qr_data);
+    if (ret == ESP_OK) {
+        char ssid_text[WIFI_SSID_MAX_LEN + 6];
+        char password_text[AP_PASSWORD_MAX_LEN + 6];
+        snprintf(ssid_text, sizeof(ssid_text), "SSID:%s", ssid);
+        snprintf(password_text, sizeof(password_text), "PASS:%s", password);
+        int text_y = SPLASH_WIFI_QR_Y + SPLASH_WIFI_QR_SIZE + 8;
+        if (text_y + 30 > height) {
+            text_y = height - 30;
+        }
+        draw_splash_text(epd_buffer, width, text_y, ssid_text);
+        draw_splash_text(epd_buffer, width, text_y + 16, password_text);
+        epaper_display(epd_buffer);
+    } else {
+        ESP_LOGE(TAG, "Failed to generate WPA2 WiFi QR code");
+    }
+
+    heap_caps_free(epd_buffer);
+    return ret;
 }
 
 esp_err_t splash_screen_display_setup_complete(const char *hostname)

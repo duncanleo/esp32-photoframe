@@ -314,10 +314,11 @@ esp_err_t power_manager_init(void)
     board_hal_led_set(BOARD_HAL_LED_POWER, deep_sleep_enabled);
     board_hal_led_set(BOARD_HAL_LED_ACTIVITY, false);
 
-    // Skip auto-sleep timer if woken by ROTATE button or timer (image generation can take >120s)
+    // Skip auto-sleep timer after Rotate/Clear or timer wakes; image generation
+    // can take longer than the normal auto-sleep timeout.
     if (wakeup_source == WAKEUP_SOURCE_ROTATE_BUTTON ||
         wakeup_source == WAKEUP_SOURCE_CLEAR_BUTTON || wakeup_source == WAKEUP_SOURCE_TIMER) {
-        ESP_LOGI(TAG, "Woken by ROTATE button, KEY button or timer, disabling auto-sleep timer");
+        ESP_LOGI(TAG, "Woken by Rotate/Clear button or timer, disabling auto-sleep timer");
     } else {
         xTaskCreate(sleep_timer_task, "sleep_timer", 4096, NULL, 5, &sleep_timer_task_handle);
     }

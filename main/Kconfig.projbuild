@@ -1,0 +1,11 @@
+menu "ESP32 PhotoFrame"
+
+config PHOTOFRAME_AP_PORTAL_ONLY
+    bool "Run as an offline AP portal"
+    default n
+    help
+        Start a password-protected PhotoFrame access point on interactive
+        wakes and serve the normal portal at 192.168.4.1. Timer and Rotate
+        button wakes stay offline and rotate images from local storage.
+
+endmenu

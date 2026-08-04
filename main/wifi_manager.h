@@ -2,6 +2,7 @@
 #define WIFI_MANAGER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "esp_err.h"
 #include "esp_wifi.h"
@@ -13,6 +14,14 @@
 #define WIFI_FAIL_BIT BIT1
 
 esp_err_t wifi_manager_init(void);
+// Start an AP with the given SSID. A NULL/empty password creates an open AP;
+// a password creates a WPA2 AP and must be 8-63 characters long.
+esp_err_t wifi_manager_start_ap(const char *ssid, const char *password);
+esp_err_t wifi_manager_stop_ap(void);
+// Return the stable AP SSID and load (or securely create) its NVS-backed WPA2
+// password. Password generation happens only when the key is absent.
+esp_err_t wifi_manager_get_ap_credentials(char *ssid, size_t ssid_len, char *password,
+                                          size_t password_len);
 esp_err_t wifi_manager_update_hostname(void);
 // Toggle between full-RX performance (WIFI_PS_NONE, low latency / fast web UI)
 // and modem power save (WIFI_PS_MIN_MODEM). Idempotent; safe to call every

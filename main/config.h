@@ -24,6 +24,7 @@ typedef enum { IP_MODE_DHCP = 0, IP_MODE_STATIC = 1 } ip_mode_t;
 #define DEVICE_NAME_MAX_LEN 64
 #define WIFI_SSID_MAX_LEN 32
 #define WIFI_PASS_MAX_LEN 64
+#define AP_PASSWORD_MAX_LEN 64
 #define IMAGE_URL_MAX_LEN 256
 #define HA_URL_MAX_LEN 256
 #define ROTATION_MODE_MAX_LEN 16
@@ -99,6 +100,7 @@ typedef enum { IP_MODE_DHCP = 0, IP_MODE_STATIC = 1 } ip_mode_t;
 // WiFi
 #define NVS_WIFI_SSID_KEY "wifi_ssid"
 #define NVS_WIFI_PASS_KEY "wifi_pass"
+#define NVS_AP_PASSWORD_KEY "ap_password"
 
 // General
 #define NVS_NAMESPACE "photoframe"

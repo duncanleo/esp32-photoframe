@@ -55,6 +55,21 @@ The script automatically:
 2. Sets the correct `sdkconfig.defaults` for the selected board
 3. Runs `idf.py build` OR `idf.py build` with correct options
 
+### Offline AP-portal variant
+
+The private AP-only variant does not join external Wi-Fi. On a cold boot or
+Wake-button wake it creates a WPA2 hotspot at `http://192.168.4.1`; the screen
+shows a QR code and the NVS-backed password. Timer, Rotate, and Clear-button
+wakes rotate local images then return to deep sleep.
+
+```bash
+./build.py --board seeedstudio_reterminal_e1002 --ap-portal-only
+```
+
+The repository workflow enables this flag for its firmware artifacts. Factory
+reset erases the AP password with the rest of NVS; the next interactive wake
+creates a new one.
+
 ### 3. Flash and Monitor
 
 The project uses ESP Component Manager to automatically download the `esp_jpeg` component during the first build.

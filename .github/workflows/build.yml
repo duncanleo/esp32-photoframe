@@ -80,6 +80,7 @@ jobs:
         target: esp32s3
         command: |
           python3 build.py --board ${{ matrix.board }} --step firmware \
+            --ap-portal-only \
             -DFIRMWARE_VERSION='${{ steps.version.outputs.version }}'
 
     - name: Install esptool

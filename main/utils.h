@@ -76,7 +76,7 @@ void sanitize_dhcp_hostname(const char *device_name, char *hostname, size_t max_
 // Buffer is at least 13 bytes (12 chars + null)
 const char *get_device_id(void);
 
-// Get the unique AP SSID for provisioning (e.g. "PhotoFrame - A1B2C")
+// Get the unique AP SSID (e.g. "PhotoFrame-AB12")
 // Returns pointer to static buffer
 const char *get_setup_ap_ssid(void);
 

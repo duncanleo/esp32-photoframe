@@ -2300,7 +2300,7 @@ static esp_err_t factory_reset_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "Factory reset requested");
 
-    // Erase all NVS data first
+    // Erase all NVS data first, including the generated AP portal password.
     ESP_LOGI(TAG, "Erasing NVS flash...");
     esp_err_t ret = nvs_flash_erase();
     if (ret != ESP_OK) {

@@ -12,6 +12,9 @@
  */
 esp_err_t splash_screen_display(void);
 
+/** Display the AP portal splash with a WPA2 QR code and recoverable credentials. */
+esp_err_t splash_screen_display_ap_credentials(const char *ssid, const char *password);
+
 /**
  * Display the setup-complete screen after first successful WiFi connection.
  *

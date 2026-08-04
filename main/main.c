@@ -214,9 +214,9 @@ static void button_task(void *arg)
                 uint32_t duration = (xTaskGetTickCount() - clear_press_time) * portTICK_PERIOD_MS;
 
                 if (duration > 50 && duration < 3000) {
-                    ESP_LOGI(TAG, "Clear button pressed, clearing display");
+                    ESP_LOGI(TAG, "Clear button pressed, triggering rotation");
                     power_manager_reset_sleep_timer();
-                    display_manager_clear();
+                    trigger_image_rotation();
                     ha_notify_update();
                 }
             }
@@ -264,11 +264,20 @@ static void log_wall_clock(const char *label)
 
 void deep_sleep_wake_main(wakeup_source_t wakeup_src)
 {
-    bool is_button_wake = (wakeup_src == WAKEUP_SOURCE_ROTATE_BUTTON);
+    bool is_button_wake =
+        (wakeup_src == WAKEUP_SOURCE_ROTATE_BUTTON || wakeup_src == WAKEUP_SOURCE_CLEAR_BUTTON);
     // Check rotation mode and HA configuration
     rotation_mode_t rotation_mode = config_manager_get_rotation_mode();
     bool ha_configured = ha_is_configured();
     bool wifi_connected = false;
+
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    // Automated wakes are intentionally local-only in this variant. Keep the
+    // persistent rotation setting intact for portal visibility, but never use
+    // URL rotation or external WiFi from timer/Rotate/Clear wake paths.
+    rotation_mode = ROTATION_MODE_STORAGE;
+    ha_configured = false;
+#endif
 
     // Early-wake check before spending power on WiFi: on boards with an
     // external RTC the corrected time is already restored at this point, so
@@ -569,17 +578,9 @@ void app_main(void)
     ESP_LOGI(TAG, "Wake-up source: %d", wakeup_src);
 
     switch (wakeup_src) {
-    case WAKEUP_SOURCE_CLEAR_BUTTON:
-        ESP_LOGI(TAG, "CLEAR button wakeup detected - clearing display and sleeping");
-        board_hal_init();             // Ensure HAL is active
-        display_manager_init();       // Initialize display
-        display_manager_clear();      // Clear screen
-        power_manager_enter_sleep();  // Go back to sleep
-        // Won't reach here
-        break;
-
     case WAKEUP_SOURCE_TIMER:
     case WAKEUP_SOURCE_ROTATE_BUTTON:
+    case WAKEUP_SOURCE_CLEAR_BUTTON:
         ESP_LOGI(TAG, "Entering deep sleep wake path (timer or rotate button)");
         deep_sleep_wake_main(wakeup_src);
         // Won't reach here after sleep
@@ -590,11 +591,37 @@ void app_main(void)
         // Continue with normal initialization
         break;
 
+    case WAKEUP_SOURCE_EXT1_UNKNOWN:
+        ESP_LOGW(TAG, "Unknown button wakeup detected - returning to deep sleep");
+        power_manager_enter_sleep();
+        // Won't reach here
+        break;
+
     default:
         // Cold boot or other wakeup - continue with normal initialization
         break;
     }
 
+#if CONFIG_PHOTOFRAME_AP_PORTAL_ONLY
+    char ap_ssid[WIFI_SSID_MAX_LEN] = {0};
+    char ap_password[AP_PASSWORD_MAX_LEN] = {0};
+    ESP_ERROR_CHECK(wifi_manager_init());
+    ESP_ERROR_CHECK(wifi_manager_get_ap_credentials(ap_ssid, sizeof(ap_ssid), ap_password,
+                                                    sizeof(ap_password)));
+    ESP_ERROR_CHECK(wifi_manager_start_ap(ap_ssid, ap_password));
+    ESP_ERROR_CHECK(splash_screen_display_ap_credentials(ap_ssid, ap_password));
+
+    xTaskCreate(button_task, "button_task", 8192, NULL, 5, NULL);
+    ESP_ERROR_CHECK(http_server_init());
+    http_server_set_ready();
+    power_manager_reset_sleep_timer();
+
+    ESP_LOGI(TAG, "===========================================");
+    ESP_LOGI(TAG, "AP portal ready at: http://192.168.4.1");
+    ESP_LOGI(TAG, "Connect to SSID: %s", ap_ssid);
+    ESP_LOGI(TAG, "===========================================");
+    return;
+#else
     ESP_ERROR_CHECK(wifi_manager_init());
     ESP_ERROR_CHECK(wifi_provisioning_init());
 
@@ -738,4 +765,5 @@ void app_main(void)
     // Delay OTA check to avoid competing with boot-time network activity
     vTaskDelay(pdMS_TO_TICKS(10000));
     ota_check_for_update(NULL, 0);
+#endif
 }
