@@ -7,6 +7,7 @@
 #include "board_hal.h"
 #include "config.h"
 #include "epaper.h"
+#include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "qrcode.h"
@@ -173,6 +174,17 @@ static void draw_ap_battery_status(uint8_t *buffer, int width)
     draw_splash_text(buffer, width, 4, battery_text);
     draw_splash_text(buffer, width, 20, "last known - may be stale");
     draw_splash_text(buffer, width, 36, "visit:192.168.4.1");
+}
+
+static void draw_ap_firmware_provenance(uint8_t *buffer, int width)
+{
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+    const char *version = app_desc ? app_desc->version : "unknown";
+    char version_text[sizeof(app_desc->version) + 9];
+
+    snprintf(version_text, sizeof(version_text), "version:%s", version);
+    draw_splash_text(buffer, width, 52, "PhotoFrame AP-only fork");
+    draw_splash_text(buffer, width, 68, version_text);
 }
 
 /**
@@ -381,6 +393,7 @@ esp_err_t splash_screen_display_ap_credentials(const char *ssid, const char *pas
     ret = esp_qrcode_generate(&qr_cfg, wifi_qr_data);
     if (ret == ESP_OK) {
         draw_ap_battery_status(epd_buffer, width);
+        draw_ap_firmware_provenance(epd_buffer, width);
 
         char ssid_text[WIFI_SSID_MAX_LEN + 6];
         char password_text[AP_PASSWORD_MAX_LEN + 6];
