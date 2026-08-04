@@ -9,9 +9,10 @@ A modern, feature-rich firmware for ESP32-based e-paper photo frames (currently 
 This private fork is a hotspot-only version of the original PhotoFrame firmware.
 It never joins external Wi-Fi: a cold boot or the green Wake button starts a
 password-protected `PhotoFrame-XXXX` access point and serves the full dashboard
-at `http://192.168.4.1`. The display shows a WPA2 QR code plus the recoverable,
-NVS-persisted SSID and password; pressing the green Wake button again always
-returns to that setup screen.
+at `http://192.168.4.1`. The display shows a WPA2 QR code, the recoverable,
+NVS-persisted SSID and password, and the last battery reading (which can become
+stale while the e-paper screen remains displayed); pressing the green Wake
+button again always returns to that setup screen.
 
 Captive-network detection is enabled in this mode: after joining the hotspot,
 the standard iOS, Android, and Windows prompts lead to the main dashboard.

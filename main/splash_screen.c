@@ -61,8 +61,8 @@ typedef struct {
 static qr_draw_ctx_t s_qr_draw_ctx;
 
 // Compact 5x7 glyphs for the credentials printed over the generated splash.
-// The password alphabet is deliberately restricted to lowercase CVC chunks,
-// digits, and hyphens, so this renderer remains small and readable.
+// The AP credentials and battery label use a constrained character set, so
+// this renderer remains small and readable.
 typedef struct {
     char character;
     uint8_t rows[7];
@@ -70,6 +70,8 @@ typedef struct {
 
 static const splash_glyph_t splash_font[] = {
     {' ', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+    {'%', {0x19, 0x19, 0x02, 0x04, 0x08, 0x13, 0x13}},
+    {'.', {0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x06}},
     {'-', {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00}},
     {':', {0x00, 0x04, 0x04, 0x00, 0x04, 0x04, 0x00}},
     {'0', {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}},
@@ -154,6 +156,23 @@ static void draw_splash_text(uint8_t *buffer, int width, int y, const char *text
             }
         }
     }
+}
+
+static void draw_ap_battery_status(uint8_t *buffer, int width)
+{
+    char battery_text[24];
+    int battery_percent = board_hal_get_battery_percent();
+    if (battery_percent >= 0 && battery_percent <= 100) {
+        snprintf(battery_text, sizeof(battery_text), "Battery:%d%%", battery_percent);
+    } else {
+        snprintf(battery_text, sizeof(battery_text), "Battery:unknown");
+    }
+
+    // E-paper retains this screen until the next refresh, so make the status
+    // timestamp-free but explicit: it is the last value read, not a live gauge.
+    draw_splash_text(buffer, width, 4, battery_text);
+    draw_splash_text(buffer, width, 20, "last known - may be stale");
+    draw_splash_text(buffer, width, 36, "visit:192.168.4.1");
 }
 
 /**
@@ -361,6 +380,8 @@ esp_err_t splash_screen_display_ap_credentials(const char *ssid, const char *pas
                                   .qrcode_ecc_level = ESP_QRCODE_ECC_MED};
     ret = esp_qrcode_generate(&qr_cfg, wifi_qr_data);
     if (ret == ESP_OK) {
+        draw_ap_battery_status(epd_buffer, width);
+
         char ssid_text[WIFI_SSID_MAX_LEN + 6];
         char password_text[AP_PASSWORD_MAX_LEN + 6];
         snprintf(ssid_text, sizeof(ssid_text), "SSID:%s", ssid);
