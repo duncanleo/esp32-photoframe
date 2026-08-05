@@ -388,7 +388,11 @@ esp_err_t apply_config_from_json(cJSON *root)
         bool url_changed = (strcmp(new_url, cur_url) != 0);
 
         if (url_changed) {
-            if (new_is_https) {
+            // A saved URL is only used in URL rotation mode. Do not make a
+            // network request (or reject an otherwise valid settings save)
+            // for an inactive legacy URL while rotating local images.
+            bool url_mode_active = config_manager_get_rotation_mode() == ROTATION_MODE_URL;
+            if (new_is_https && url_mode_active) {
                 char err_buf[256] = {0};
                 esp_err_t pin_ret = cert_pin_fetch_and_store(new_url, err_buf, sizeof(err_buf));
                 if (pin_ret != ESP_OK) {

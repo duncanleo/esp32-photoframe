@@ -133,14 +133,6 @@ const rotationOptions = [
   { title: "270°", value: 270 },
 ];
 
-const rotationModeOptions = computed(() => {
-  const options = [{ title: "URL - Fetch image from URL", value: "url" }];
-  if (appStore.systemInfo.sdcard_inserted || appStore.systemInfo.has_flash_storage) {
-    options.unshift({ title: "Storage - Rotate through images", value: "storage" });
-  }
-  return options;
-});
-
 const sdRotationModeOptions = [
   { title: "Random - Shuffle images", value: "random" },
   { title: "Sequential - In sequence", value: "sequential" },
@@ -496,25 +488,14 @@ async function performFactoryReset() {
                 :disabled="!settingsStore.deviceSettings.autoRotate"
               />
 
-              <v-select
-                v-model="settingsStore.deviceSettings.rotationMode"
-                :items="rotationModeOptions"
-                item-title="title"
-                item-value="value"
-                label="Rotation Mode"
-                variant="outlined"
-                class="mt-8 mb-4"
-                :disabled="!settingsStore.deviceSettings.autoRotate"
-              />
-
               <v-expand-transition>
                 <v-card
                   v-if="
                     settingsStore.deviceSettings.autoRotate &&
-                    settingsStore.deviceSettings.rotationMode === 'storage'
+                    (appStore.systemInfo.sdcard_inserted || appStore.systemInfo.has_flash_storage)
                   "
                   variant="tonal"
-                  class="mb-4"
+                  class="mt-8 mb-4"
                 >
                   <v-card-text>
                     <v-select
@@ -526,94 +507,6 @@ async function performFactoryReset() {
                       variant="outlined"
                       hide-details
                     />
-                  </v-card-text>
-                </v-card>
-              </v-expand-transition>
-
-              <v-expand-transition>
-                <v-card
-                  v-if="
-                    settingsStore.deviceSettings.autoRotate &&
-                    settingsStore.deviceSettings.rotationMode === 'url'
-                  "
-                  variant="tonal"
-                  class="mb-4"
-                >
-                  <v-card-text>
-                    <v-text-field
-                      v-model="settingsStore.deviceSettings.imageUrl"
-                      label="Image URL"
-                      variant="outlined"
-                      hide-details
-                      class="mb-4"
-                    />
-
-                    <div
-                      v-if="settingsStore.deviceSettings.caCertSet"
-                      class="mb-4 d-flex flex-column ga-1"
-                    >
-                      <v-chip
-                        color="success"
-                        size="small"
-                        variant="tonal"
-                        style="align-self: flex-start"
-                      >
-                        <v-icon start>mdi-check-circle</v-icon>
-                        Certificate Pinned
-                      </v-chip>
-                      <div class="text-caption text-medium-emphasis">
-                        The TLS certificate for this HTTPS URL is pinned. It will re-pin
-                        automatically when you change the URL.
-                      </div>
-                    </div>
-
-                    <v-alert
-                      v-if="settingsStore.deviceSettings.lastFetchError"
-                      type="error"
-                      variant="tonal"
-                      density="compact"
-                      class="mb-4"
-                    >
-                      Last fetch error: {{ settingsStore.deviceSettings.lastFetchError }}
-                    </v-alert>
-
-                    <v-checkbox
-                      v-if="
-                        appStore.systemInfo.sdcard_inserted || appStore.systemInfo.has_flash_storage
-                      "
-                      v-model="settingsStore.deviceSettings.saveDownloadedImages"
-                      label="Save downloaded images to Downloads album"
-                      color="primary"
-                      class="mb-8"
-                      hide-details
-                    />
-
-                    <v-text-field
-                      v-model="settingsStore.deviceSettings.accessToken"
-                      label="Access Token (Optional)"
-                      variant="outlined"
-                      hint="Sets Authorization: Bearer header"
-                      persistent-hint
-                      class="mt-4"
-                    />
-
-                    <v-row class="mt-4">
-                      <v-col cols="12" md="6">
-                        <v-text-field
-                          v-model="settingsStore.deviceSettings.httpHeaderKey"
-                          label="Custom Header Name"
-                          variant="outlined"
-                          placeholder="e.g., X-API-Key"
-                        />
-                      </v-col>
-                      <v-col cols="12" md="6">
-                        <v-text-field
-                          v-model="settingsStore.deviceSettings.httpHeaderValue"
-                          label="Custom Header Value"
-                          variant="outlined"
-                        />
-                      </v-col>
-                    </v-row>
                   </v-card-text>
                 </v-card>
               </v-expand-transition>

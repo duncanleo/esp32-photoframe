@@ -182,7 +182,7 @@ Update configuration. Only include fields to change.
 }
 ```
 
-**TLS certificate pinning:** If the request changes `image_url` to an HTTPS URL different from the current value, the device fetches and pins that server's TLS certificate before applying the config. If the fetch fails, the request returns `400 Bad Request` with a `message` describing the failure and **no config changes are persisted**. Changing `image_url` to an HTTP URL or clearing it clears any previously pinned certificate. `GET /api/config` reports the current state via `ca_cert_set`.
+**TLS certificate pinning:** When URL rotation is active, changing `image_url` to an HTTPS URL different from the current value makes the device fetch and pin that server's TLS certificate before applying the config. If the fetch fails, the request returns `400 Bad Request` with a `message` describing the failure and **no config changes are persisted**. Changing `image_url` to an HTTP URL or clearing it clears any previously pinned certificate. Stored URLs are not contacted while rotation mode is `storage`. `GET /api/config` reports the current state via `ca_cert_set`.
 
 ### `PATCH /api/config`
 

@@ -225,7 +225,6 @@ export const useSettingsStore = defineStore("settings", () => {
       display_rotation_deg: deviceSettings.value.displayRotationDeg,
       rotation_mode: deviceSettings.value.rotationMode,
       sd_rotation_mode: deviceSettings.value.sdRotationMode,
-      image_url: deviceSettings.value.imageUrl,
       deep_sleep_enabled: deviceSettings.value.deepSleepEnabled,
       debug_log_enabled: deviceSettings.value.debugLogEnabled,
       save_downloaded_images: deviceSettings.value.saveDownloadedImages,
